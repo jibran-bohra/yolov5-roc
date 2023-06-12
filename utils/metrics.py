@@ -51,18 +51,19 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir='.', names
     nc = unique_classes.shape[0]  # number of classes, number of detections
 
     # Create Precision-Recall curve and compute AP for each class
-    px, py = np.linspace(0, 1, 1000), []  # for plotting
-    ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    px, py, pyROC = np.linspace(0, 1, 1000), [], []  # for plotting
+    ap, auc = np.zeros((nc, tp.shape[1])), np.zeros((nc, tp.shape[1]))
+    p, r, tpr, fpr = np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000)), np.zeros((nc, 1000))
     for ci, c in enumerate(unique_classes):
-        i = pred_cls == c
-        n_l = nt[ci]  # number of labels
-        n_p = i.sum()  # number of predictions
+        i = pred_cls == c           # Boolean mask for class
+        n_l = nt[ci]                # number of labels
+        n_p = i.sum()               # number of predictions 
         if n_p == 0 or n_l == 0:
             continue
 
         # Accumulate FPs and TPs
-        fpc = (1 - tp[i]).cumsum(0)
-        tpc = tp[i].cumsum(0)
+        fpc = (1 - tp[i]).cumsum(0)         #False Positive Count
+        tpc = tp[i].cumsum(0)               #True Positive Count
 
         # Recall
         recall = tpc / (n_l + eps)  # recall curve
@@ -72,17 +73,28 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir='.', names
         precision = tpc / (tpc + fpc)  # precision curve
         p[ci] = np.interp(-px, -conf[i], precision[:, 0], left=1)  # p at pr_score
 
+        # True Positive Rate
+        true_positive_rate = tpc / (n_l + eps)  # true positive rate or recall curve
+        tpr[ci] = np.interp(-px, -conf[i], true_positive_rate[:, 0], left=1)  
+
+        # False Positive Rate
+        false_positive_rate = fpc / (pred_cls.shape[0] - n_l + eps)  # false positive rate
+        fpr[ci] = np.interp(-px, -conf[i], false_positive_rate[:, 0], left=1)  
+
         # AP from recall-precision curve
         for j in range(tp.shape[1]):
-            ap[ci, j], mpre, mrec = compute_ap(recall[:, j], precision[:, j])
+            ap[ci, j],  mpre, mrec = compute_ap(recall[:, j], precision[:, j])
+            auc[ci, j], mtpr, mfpr = compute_auc(true_positive_rate[:, j], false_positive_rate[:, j])
             if plot and j == 0:
                 py.append(np.interp(px, mrec, mpre))  # precision at mAP@0.5
+                pyROC.append(np.interp(px, mfpr, mtpr))  #ROC 
 
     # Compute F1 (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + eps)
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = dict(enumerate(names))  # to dict
     if plot:
+        plot_roc_curve(px, pyROC, auc, Path(save_dir) / f'{prefix}ROC_curve.png', names)
         plot_pr_curve(px, py, ap, Path(save_dir) / f'{prefix}PR_curve.png', names)
         plot_mc_curve(px, f1, Path(save_dir) / f'{prefix}F1_curve.png', names, ylabel='F1')
         plot_mc_curve(px, p, Path(save_dir) / f'{prefix}P_curve.png', names, ylabel='Precision')
@@ -121,6 +133,27 @@ def compute_ap(recall, precision):
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])  # area under curve
 
     return ap, mpre, mrec
+
+def compute_auc(true_positive_rate, false_positive_rate):
+    """ Compute the AUC, given the TPR and FPR curves
+    # Arguments
+        true_positive_rate:    The TPR curve (list)
+        false_positive_rate: The FPR curve (list)
+    # Returns
+        AUC, TPR curve, FPR curve
+    """
+
+    # Append sentinel values to beginning and end
+    mtpr = np.concatenate(([0.0], true_positive_rate, [1.0]))
+    mfpr = np.concatenate(([0.0], false_positive_rate, [1.0]))
+
+    # Integrate area under curve
+    method = 'interp'  # methods: 'continuous', 'interp'
+    if method == 'interp':
+        x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
+        AUC = np.trapz(np.interp(x, mfpr, mtpr), x)  # integrate
+
+    return AUC, mtpr, mfpr
 
 
 class ConfusionMatrix:
@@ -356,5 +389,27 @@ def plot_mc_curve(px, py, save_dir=Path('mc_curve.png'), names=(), xlabel='Confi
     ax.set_ylim(0, 1)
     ax.legend(bbox_to_anchor=(1.04, 1), loc='upper left')
     ax.set_title(f'{ylabel}-Confidence Curve')
+    fig.savefig(save_dir, dpi=250)
+    plt.close(fig)
+
+@threaded
+def plot_roc_curve(px, py, auc, save_dir=Path('roc_curve.png'), names=()):
+    # Precision-recall curve
+    fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
+    py = np.stack(py, axis=1)
+
+    if 0 < len(names) < 21:  # display per-class legend if < 21 classes
+        for i, y in enumerate(py.T):
+            ax.plot(px, y, linewidth=1, label=f'{names[i]} {auc[i, 0]:.3f}')  # plot(recall, precision)
+    else:
+        ax.plot(px, py, linewidth=1, color='grey')  # plot(recall, precision)
+
+    ax.plot(px, py.mean(1), linewidth=3, color='blue', label='all classes, AUC: %.3f' % auc[:, 0].mean())
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.legend(bbox_to_anchor=(1.04, 1), loc='upper left')
+    ax.set_title('Receiver Operator Characteristic Curve')
     fig.savefig(save_dir, dpi=250)
     plt.close(fig)
