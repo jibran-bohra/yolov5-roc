@@ -78,7 +78,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Example usage:
-  python script.py 'val/exp1' 'val/exp2 'val/exp3' --runs_dir '/path/to/runs' --save_dir '/path/to/save' --namePR 'my_PR_plot.png' --nameROC 'my_ROC_plot.png'
+  python comparative_plots.py 'val/exp1' 'val/exp2 'val/exp3' --runs_dir '/path/to/runs' --save_dir '/path/to/save' --namePR 'my_PR_plot.png' --nameROC 'my_ROC_plot.png'
 """,
     )
     parser.add_argument(
