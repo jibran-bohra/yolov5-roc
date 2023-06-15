@@ -94,6 +94,10 @@ def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir='.', names
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = dict(enumerate(names))  # to dict
     if plot:
+        np.save(Path(save_dir) / f'{prefix}AUC.npy', auc)
+        np.save(Path(save_dir) / f'{prefix}AP.npy', ap)
+        np.save(Path(save_dir) / f'{prefix}PR_curve.npy', py)
+        np.save(Path(save_dir) / f'{prefix}ROC_curve.npy', pyROC)
         plot_roc_curve(px, pyROC, auc, Path(save_dir) / f'{prefix}ROC_curve.png', names)
         plot_pr_curve(px, py, ap, Path(save_dir) / f'{prefix}PR_curve.png', names)
         plot_mc_curve(px, f1, Path(save_dir) / f'{prefix}F1_curve.png', names, ylabel='F1')
@@ -394,15 +398,15 @@ def plot_mc_curve(px, py, save_dir=Path('mc_curve.png'), names=(), xlabel='Confi
 
 @threaded
 def plot_roc_curve(px, py, auc, save_dir=Path('roc_curve.png'), names=()):
-    # Precision-recall curve
+    # Receiver Operator Characteristic curve
     fig, ax = plt.subplots(1, 1, figsize=(9, 6), tight_layout=True)
     py = np.stack(py, axis=1)
 
     if 0 < len(names) < 21:  # display per-class legend if < 21 classes
         for i, y in enumerate(py.T):
-            ax.plot(px, y, linewidth=1, label=f'{names[i]} {auc[i, 0]:.3f}')  # plot(recall, precision)
+            ax.plot(px, y, linewidth=1, label=f'{names[i]} {auc[i, 0]:.3f}')  # plot(FPR, TPR)
     else:
-        ax.plot(px, py, linewidth=1, color='grey')  # plot(recall, precision)
+        ax.plot(px, py, linewidth=1, color='grey')  # plot(FPR, TPR)
 
     ax.plot(px, py.mean(1), linewidth=3, color='blue', label='all classes, AUC: %.3f' % auc[:, 0].mean())
     ax.set_xlabel('False Positive Rate')
