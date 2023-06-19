@@ -6,16 +6,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-FILE = Path(__file__).resolve()
-ROOT = FILE.parents[0]  # YOLOv5 root directory
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))  # add ROOT to PATH
-ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
-
 def plot_roc_comparison(
     dir_list,
-    runs_dir= ROOT / Path("runs"),
-    save_dir= ROOT / Path("runs/comparative_plots"),
+    runs_dir,
+    save_dir,
     name="ROC_comparison.png",
 ):
     if not save_dir.exists():
@@ -45,8 +39,8 @@ def plot_roc_comparison(
 
 def plot_pr_comparison(
     dir_list,
-    runs_dir= ROOT / Path("runs"),
-    save_dir= ROOT / Path("runs/comparative_plots"),
+    runs_dir,
+    save_dir,
     name="PR_comparison.png",
 ):
     if not save_dir.exists():
@@ -73,12 +67,18 @@ def plot_pr_comparison(
 
 
 def main():
+    FILE = Path(__file__).resolve()
+    ROOT = FILE.parents[0]  # YOLOv5 root directory
+    if str(ROOT) not in sys.path:
+        sys.path.append(str(ROOT))  # add ROOT to PATH
+    ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
+
     parser = argparse.ArgumentParser(
         description="Process PR and ROC comparison.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Example usage:
-  python comparative_plots.py 'val/exp1' 'val/exp2 'val/exp3' --runs_dir '/path/to/runs' --save_dir '/path/to/save' --namePR 'my_PR_plot.png' --nameROC 'my_ROC_plot.png'
+  python comparative_plots.py 'val/exp1' 'val/exp2 'val/exp3' --runs_dir 'runs' --save_dir 'runs/comparative_plots' --namePR 'my_PR_plot.png' --nameROC 'my_ROC_plot.png'
 """,
     )
     parser.add_argument(
@@ -91,13 +91,13 @@ Example usage:
     parser.add_argument(
         "--runs_dir", 
         type=str, 
-        default=ROOT / Path("runs"), 
+        default = ROOT / os.path.join(*"runs".split("/")), 
         help="directory for runs"
     )
     parser.add_argument(
         "--save_dir",
         type=str,
-        default=ROOT / Path("runs/comparative_plots"),
+        default = ROOT / os.path.join(*"runs/comparative".split("/")),
         help="directory for saving plots",
     )
     parser.add_argument(
@@ -117,21 +117,26 @@ Example usage:
 
     # Generate a list of directories
     directory_list = args.directories
+    runs_dir = Path(args.runs_dir)
+    save_dir = Path(args.save_dir)
 
     # Print the list of directories
-    print("Input Directories:")
-    print(directory_list)
+    print("Input Directories:", directory_list)             #These are folders within the runs directory
+    print("ROOT:", ROOT)                                    #Root directory; all paths are relative to this directory
+    print("runs_dir: ", runs_dir)                           #runs directory; input directories must be contained here
+    print("save_dir:", save_dir)                            #save directory; plots will be output here. 
 
     plot_pr_comparison(
         directory_list,
-        runs_dir= ROOT / Path(args.runs_dir),
-        save_dir= ROOT / Path(args.save_dir),
+        runs_dir= Path(args.runs_dir),
+        save_dir= Path(args.save_dir),
         name=args.namePR,
     )
+    
     plot_roc_comparison(
         directory_list,
-        runs_dir= ROOT / Path(args.runs_dir),
-        save_dir= ROOT / Path(args.save_dir),
+        runs_dir= Path(args.runs_dir),
+        save_dir= Path(args.save_dir),
         name=args.nameROC,
     )
 
